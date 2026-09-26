@@ -1,0 +1,3 @@
+[?] Archivo invalido: falta el delimitador '?' al final de la linea
+coin vidas = 3
+flag(vidas)?

@@ -1,0 +1,13 @@
+[?] Archivo de prueba valido
+coin vidas = 3?
+star puntos = 0.0?
+box(puntos)?
+
+mushroom (vidas > 0) [
+    puntos = puntos + 10.5 * 2?
+    flag(puntos)?
+]
+
+warp (vidas < 10) [
+    vidas = vidas + 1?
+]
