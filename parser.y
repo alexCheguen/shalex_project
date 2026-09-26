@@ -6,6 +6,7 @@
 
 int yylex(void);
 extern FILE *yyin;
+extern int yylineno;
 void yyerror(const char *s);
 
 /* --- ESTRUCTURA TABLA DE SÍMBOLOS --- */
@@ -84,7 +85,7 @@ static ASTNode *root = NULL;
 %token <int_val> TOKEN_NUM_INT
 %token <float_val> TOKEN_NUM_FLOAT
 
-%type <ast_node> programa lista_instrucciones instruccion declaracion asignacion lectura escritura condicional ciclo expresion termino factor
+%type <ast_node> programa lista_instrucciones instruccion declaracion asignacion lectura escritura condicional ciclo expresion condicion termino factor
 
 %start programa
 
@@ -127,6 +128,12 @@ declaracion:
         free($2);
         $$ = createNode(buf, $4, NULL);
     }
+    | TOKEN_STAR TOKEN_ID '=' expresion '?' {
+        addSymbol($2, "star (float)");
+        char buf[100]; snprintf(buf, sizeof(buf), "DECLARACION_ASIG (star %s)", $2);
+        free($2);
+        $$ = createNode(buf, $4, NULL);
+    }
     ;
 
 asignacion:
@@ -152,17 +159,24 @@ escritura:
     ;
 
 condicional:
-    TOKEN_MUSHROOM '(' expresion '>' expresion ')' '[' lista_instrucciones ']' {
-        ASTNode* cond = createNode("CONDICION (>)", $3, $5);
-        $$ = createNode("MUSHROOM (IF)", cond, $8);
+    TOKEN_MUSHROOM '(' condicion ')' '[' lista_instrucciones ']' {
+        $$ = createNode("MUSHROOM (IF)", $3, $6);
     }
     ;
 
 ciclo:
-    TOKEN_WARP '(' expresion '<' expresion ')' '[' lista_instrucciones ']' {
-        ASTNode* cond = createNode("CONDICION (<)", $3, $5);
-        $$ = createNode("WARP (WHILE)", cond, $8);
+    TOKEN_WARP '(' condicion ')' '[' lista_instrucciones ']' {
+        $$ = createNode("WARP (WHILE)", $3, $6);
     }
+    ;
+
+condicion:
+    expresion '>' expresion  { $$ = createNode("CONDICION (>)", $1, $3); }
+    | expresion '<' expresion  { $$ = createNode("CONDICION (<)", $1, $3); }
+    | expresion TOKEN_EQ expresion  { $$ = createNode("CONDICION (==)", $1, $3); }
+    | expresion TOKEN_NEQ expresion { $$ = createNode("CONDICION (!=)", $1, $3); }
+    | expresion TOKEN_LEQ expresion { $$ = createNode("CONDICION (<=)", $1, $3); }
+    | expresion TOKEN_GEQ expresion { $$ = createNode("CONDICION (>=)", $1, $3); }
     ;
 
 expresion:
@@ -197,7 +211,7 @@ factor:
 %%
 
 void yyerror(const char *s) {
-    fprintf(stderr, "\n[ERROR SINTÁCTICO]: %s\n", s);
+    fprintf(stderr, "\n[ERROR SINTÁCTICO]: %s en la línea %d\n", s, yylineno);
 }
 
 int main(int argc, char **argv) {

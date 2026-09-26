@@ -8,9 +8,7 @@
 void yyerror(const char *s);
 %}
 
-%option noyywrap
-%option nounput
-%option noinput
+%option noyywrap yylineno nodefault nounput noinput
 
 %%
 
@@ -59,9 +57,9 @@ void yyerror(const char *s);
     return TOKEN_NUM_INT;
 }
 
-"\[\?\]"[^\n]*                ; /* Ignorar comentarios simples */
-"\[\?\?\]"(.|\n)*?"\[\?\?\]"  ; /* Ignorar comentarios multilinea */
-[ \t\r\n]+                    ; /* Ignorar espacios */
+"\[\?\]"[^\n]*               ; /* Ignora comentarios [?] */
+"\[\?\?\]"(.|\n)*?"\[\?\?\]" ; /* Ignora comentarios multilínea [??] */
+[ \t\r\n]+                   ; /* Ignora espacios */
 
 . { printf("Error Léxico: Carácter no reconocido '%s'\n", yytext); }
 
