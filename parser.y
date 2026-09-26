@@ -211,7 +211,10 @@ factor:
 %%
 
 void yyerror(const char *s) {
-    fprintf(stderr, "\n[ERROR SINTÁCTICO]: %s en la línea %d\n", s, yylineno);
+    extern int yylineno;
+    extern char *yytext;
+
+    fprintf(stderr, "\n[ERROR SINTÁCTICO]: %s cerca de '%s' línea %d\n\n",s, yytext, yylineno - 1);
 }
 
 int main(int argc, char **argv) {
