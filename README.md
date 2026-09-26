@@ -12,8 +12,3 @@ Asegúrate de tener instaladas las siguientes herramientas en tu sistema (Linux/
 - **GCC** (GNU Compiler Collection)
 - **Flex** (Fast Lexical Analyzer)
 - **Bison** (Parser Generator)
-
-Para instalarlas en Ubuntu/Debian:
-```bash
-sudo apt update
-sudo apt install build-essential flex bison
