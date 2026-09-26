@@ -1,37 +1,37 @@
 %{
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-extern int yylex();
+int yylex(void);
 extern FILE *yyin;
 void yyerror(const char *s);
 
-/* --- ESTRUCTURA DE LA TABLA DE SÍMBOLOS --- */
+/* --- ESTRUCTURA TABLA DE SÍMBOLOS --- */
 typedef struct Symbol {
     char name[50];
     char type[20];
     struct Symbol *next;
 } Symbol;
 
-Symbol *symbolTable = NULL;
+static Symbol *symbolTable = NULL;
 
-void addSymbol(const char *name, const char *type) {
+static void addSymbol(const char *name, const char *type) {
     Symbol *s = symbolTable;
     while (s) {
-        if (strcmp(s->name, name) == 0) {
-            return; // Ya existe en la tabla
-        }
+        if (strcmp(s->name, name) == 0) return;
         s = s->next;
     }
     Symbol *newSym = (Symbol *)malloc(sizeof(Symbol));
-    strcpy(newSym->name, name);
-    strcpy(newSym->type, type);
+    if (!newSym) return;
+    strncpy(newSym->name, name, sizeof(newSym->name) - 1);
+    strncpy(newSym->type, type, sizeof(newSym->type) - 1);
     newSym->next = symbolTable;
     symbolTable = newSym;
 }
 
-void printSymbolTable() {
+static void printSymbolTable(void) {
     printf("\n================ TABLA DE SÍMBOLOS ================\n");
     printf("%-20s | %-15s\n", "Nombre (ID)", "Tipo de Dato");
     printf("---------------------------------------------------\n");
@@ -43,22 +43,23 @@ void printSymbolTable() {
     printf("===================================================\n\n");
 }
 
-/* --- ESTRUCTURA DEL ÁRBOL SINTÁCTICO ABSTRACTO (AST) --- */
+/* --- ESTRUCTURA DEL AST --- */
 typedef struct ASTNode {
     char label[100];
     struct ASTNode *left;
     struct ASTNode *right;
 } ASTNode;
 
-ASTNode* createNode(const char* label, ASTNode* left, ASTNode* right) {
+static ASTNode* createNode(const char* label, ASTNode* left, ASTNode* right) {
     ASTNode* node = (ASTNode*)malloc(sizeof(ASTNode));
-    strcpy(node->label, label);
+    if (!node) return NULL;
+    strncpy(node->label, label, sizeof(node->label) - 1);
     node->left = left;
     node->right = right;
     return node;
 }
 
-void printAST(ASTNode* node, int level) {
+static void printAST(ASTNode* node, int level) {
     if (!node) return;
     for (int i = 0; i < level; i++) printf("  ");
     printf("|-- %s\n", node->label);
@@ -66,7 +67,7 @@ void printAST(ASTNode* node, int level) {
     printAST(node->right, level + 1);
 }
 
-ASTNode *root = NULL;
+static ASTNode *root = NULL;
 %}
 
 %union {
@@ -110,31 +111,36 @@ instruccion:
 declaracion:
     TOKEN_COIN TOKEN_ID '?' {
         addSymbol($2, "coin (int)");
-        char buf[100]; sprintf(buf, "DECLARACION (coin %s)", $2);
+        char buf[100]; snprintf(buf, sizeof(buf), "DECLARACION (coin %s)", $2);
+        free($2);
         $$ = createNode(buf, NULL, NULL);
     }
     | TOKEN_STAR TOKEN_ID '?' {
         addSymbol($2, "star (float)");
-        char buf[100]; sprintf(buf, "DECLARACION (star %s)", $2);
+        char buf[100]; snprintf(buf, sizeof(buf), "DECLARACION (star %s)", $2);
+        free($2);
         $$ = createNode(buf, NULL, NULL);
     }
     | TOKEN_COIN TOKEN_ID '=' expresion '?' {
         addSymbol($2, "coin (int)");
-        char buf[100]; sprintf(buf, "DECLARACION_ASIG (coin %s)", $2);
+        char buf[100]; snprintf(buf, sizeof(buf), "DECLARACION_ASIG (coin %s)", $2);
+        free($2);
         $$ = createNode(buf, $4, NULL);
     }
     ;
 
 asignacion:
     TOKEN_ID '=' expresion '?' {
-        char buf[100]; sprintf(buf, "ASIGNACION (= %s)", $1);
+        char buf[100]; snprintf(buf, sizeof(buf), "ASIGNACION (= %s)", $1);
+        free($1);
         $$ = createNode(buf, $3, NULL);
     }
     ;
 
 lectura:
     TOKEN_BOX '(' TOKEN_ID ')' '?' {
-        char buf[100]; sprintf(buf, "ENTRADA_BOX (%s)", $3);
+        char buf[100]; snprintf(buf, sizeof(buf), "ENTRADA_BOX (%s)", $3);
+        free($3);
         $$ = createNode(buf, NULL, NULL);
     }
     ;
@@ -174,15 +180,16 @@ termino:
 factor:
     '(' expresion ')' { $$ = $2; }
     | TOKEN_ID {
-        char buf[100]; sprintf(buf, "ID (%s)", $1);
+        char buf[100]; snprintf(buf, sizeof(buf), "ID (%s)", $1);
+        free($1);
         $$ = createNode(buf, NULL, NULL);
     }
     | TOKEN_NUM_INT {
-        char buf[100]; sprintf(buf, "INT (%d)", $1);
+        char buf[100]; snprintf(buf, sizeof(buf), "INT (%d)", $1);
         $$ = createNode(buf, NULL, NULL);
     }
     | TOKEN_NUM_FLOAT {
-        char buf[100]; sprintf(buf, "FLOAT (%.2f)", $1);
+        char buf[100]; snprintf(buf, sizeof(buf), "FLOAT (%.2f)", $1);
         $$ = createNode(buf, NULL, NULL);
     }
     ;
@@ -206,12 +213,10 @@ int main(int argc, char **argv) {
     printf("Iniciando análisis sintáctico...\n");
     if (yyparse() == 0) {
         printf("\n¡Análisis Sintáctico Exitoso!\n");
-        
         printSymbolTable();
-
-        printf("================ ÁRBOLES SINTÁCTICO (AST) ================\n");
+        printf("================ ÁRBOL SINTÁCTICO ABSTRACTO (AST) ================\n");
         printAST(root, 0);
-        printf("=========================================================\n");
+        printf("==================================================================\n");
     } else {
         printf("\nFalló el análisis del archivo.\n");
     }

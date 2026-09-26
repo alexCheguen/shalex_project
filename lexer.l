@@ -1,8 +1,11 @@
 %{
+#define _POSIX_C_SOURCE 200809L
 #include "parser.tab.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+void yyerror(const char *s);
 %}
 
 %option noyywrap
@@ -54,10 +57,9 @@
     return TOKEN_NUM_INT;
 }
 
-"\[\?\]"[^\n]*  ; /* Ignorar comentario simple [?] */
-"\[\?\?\]"(.|\n)*?"\[\?\?\]" ; /* Ignorar comentario multilinea [??] */
-
-[ \t\r\n]+     ; /* Ignorar espacios en blanco */
+"\[\?\]"[^\n]*                ; /* Ignorar comentarios simples */
+"\[\?\?\]"(.|\n)*?"\[\?\?\]"  ; /* Ignorar comentarios multilinea */
+[ \t\r\n]+                    ; /* Ignorar espacios */
 
 . { printf("Error Léxico: Carácter no reconocido '%s'\n", yytext); }
 
