@@ -53,14 +53,16 @@ typedef enum {
     NODE_BIN_OP,
     NODE_VAR,
     NODE_LITERAL,
-    NODE_BLOCK
+    NODE_BLOCK,
+    NODE_COMMENT_LINE,
+    NODE_COMMENT_MULTI
 } NodeType;
 
 typedef struct ASTNode {
     NodeType type;
     char label[100];
     char var_name[50];
-    char value_str[100];
+    char value_str[2048];
     char op_symbol[10];
     
     struct ASTNode *left;
@@ -92,7 +94,7 @@ void addChild(ASTNode *parent, ASTNode *child) {
 }
 
 /* =========================================================================
- * 2. TRADUCCIÓN A ULORIO (.urio)
+ * 2. TRADUCCIÓN A LENGUAJE URIO (.urio)
  * ========================================================================= */
 
 void generar_codigo_ulorio(ASTNode *node, FILE *out) {
@@ -104,6 +106,14 @@ void generar_codigo_ulorio(ASTNode *node, FILE *out) {
             for (int i = 0; i < node->child_count; i++) {
                 generar_codigo_ulorio(node->children[i], out);
             }
+            break;
+
+        case NODE_COMMENT_LINE:
+            fprintf(out, "//%s\n", node->value_str);
+            break;
+
+        case NODE_COMMENT_MULTI:
+            fprintf(out, "/*%s*/\n", node->value_str);
             break;
 
         case NODE_INT:
@@ -217,10 +227,9 @@ void generar_codigo_ulorio(ASTNode *node, FILE *out) {
 
 %token TOKEN_COIN TOKEN_STAR TOKEN_PLAYER TOKEN_MUSHROOM TOKEN_ONEUP
 %token TOKEN_POISON TOKEN_WARP TOKEN_LEVEL TOKEN_BOX TOKEN_FLAG TOKEN_PIPE
-
 %token TOKEN_EQ TOKEN_NEQ TOKEN_LEQ TOKEN_GEQ
 
-%token <str_val> TOKEN_ID TOKEN_STRING
+%token <str_val> TOKEN_ID TOKEN_STRING TOKEN_COMMENT_LINE TOKEN_COMMENT_MULTI
 %token <int_val> TOKEN_NUM_INT
 %token <float_val> TOKEN_NUM_FLOAT
 
@@ -265,6 +274,18 @@ instruccion:
     | ciclo       { $$ = $1; }
     | lectura     { $$ = $1; }
     | escritura   { $$ = $1; }
+    | TOKEN_COMMENT_LINE {
+        ASTNode *node = createNode(NODE_COMMENT_LINE, "COMENTARIO_LINEA");
+        strncpy(node->value_str, $1, 2047);
+        free($1);
+        $$ = node;
+    }
+    | TOKEN_COMMENT_MULTI {
+        ASTNode *node = createNode(NODE_COMMENT_MULTI, "COMENTARIO_MULTI");
+        strncpy(node->value_str, $1, 2047);
+        free($1);
+        $$ = node;
+    }
     | TOKEN_PIPE TOKEN_ID '?' {
         ASTNode *node = createNode(NODE_PIPE, "PIPE");
         strncpy(node->var_name, $2, 49);
@@ -344,6 +365,11 @@ bloques_alternativos:
     /* Vacio */ { $$ = NULL; }
     | TOKEN_POISON '[' lista_instrucciones ']' {
         $$ = $3;
+    }
+    | TOKEN_POISON instruccion {
+        ASTNode *block = createNode(NODE_BLOCK, "BLOQUE");
+        addChild(block, $2);
+        $$ = block;
     }
     | TOKEN_ONEUP '(' condicion ')' '[' lista_instrucciones ']' bloques_alternativos {
         if ($8 == NULL) {

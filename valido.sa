@@ -6,8 +6,8 @@ star puntos = 10.3?
 
 box(puntos)?
 
-mushroom (vidas > 5) [
-    puntos = puntos + 10.5 * 2?
+mushroom (vidas >= 5) [
+    puntos = puntos + (10.5 * 2)?
 ] oneUp (vidas > 0) [
     puntos = puntos + 5?
 ] poison [

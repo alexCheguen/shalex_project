@@ -6,9 +6,12 @@
 #include <string.h>
 
 void yyerror(const char *s);
+static char comment_buf[2048];
 %}
 
 %option noyywrap yylineno nodefault nounput noinput
+
+%x MULTI_COMMENT
 
 %%
 
@@ -42,7 +45,7 @@ void yyerror(const char *s);
 "("             { return '('; }
 ")"             { return ')'; }
 
-\'[^\']*\' {
+\"[^\"]*\"|\'[^\']*\' {
     int len = strlen(yytext);
     yylval.str_val = (char *)malloc(len - 1);
     strncpy(yylval.str_val, yytext + 1, len - 2);
@@ -65,11 +68,31 @@ void yyerror(const char *s);
     return TOKEN_NUM_INT;
 }
 
-"//".*                                  ;
-"/*"([^*]|\*+[^*/])*"*/"               ;
-"[?]"[^\n]*                             ;
-"[??]"([^[??]]|(\?[^\[??\]]))*?"[??]"   ;
-[ \t\r\n]+                              ;
+"[?]"[^\n]* {
+    yylval.str_val = strdup(yytext + 3);
+    return TOKEN_COMMENT_LINE;
+}
+
+"[??]" {
+    comment_buf[0] = '\0';
+    BEGIN(MULTI_COMMENT);
+}
+
+<MULTI_COMMENT>"[??]" {
+    BEGIN(INITIAL);
+    yylval.str_val = strdup(comment_buf);
+    return TOKEN_COMMENT_MULTI;
+}
+
+<MULTI_COMMENT>\n {
+    strcat(comment_buf, "\n");
+}
+
+<MULTI_COMMENT>. {
+    strcat(comment_buf, yytext);
+}
+
+[ \t\r\n\xa0]+  ;
 
 . {
     printf("Error Lexico: Caracter no reconocido '%s' en la linea %d\n", yytext, yylineno);
