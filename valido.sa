@@ -1,13 +1,32 @@
-[?] Archivo de prueba valido
-coin vidas = 3?
-star puntos = 0.0?
+[?] Archivo de prueba valido corregido
+
+player Jugador1 = 'Alex'?
+coin vidas = 5?
+star puntos = 10.3?
+
 box(puntos)?
 
-mushroom (vidas > 0) [
+mushroom (vidas > 5) [
     puntos = puntos + 10.5 * 2?
-    flag(puntos)?
+] oneUp (vidas > 0) [
+    puntos = puntos + 5?
+] poison [
+    vidas = 0?
 ]
+
+flag(puntos)?
 
 warp (vidas < 10) [
     vidas = vidas + 1?
 ]
+
+level (coin i = 0? i < 5? i = i + 1) [
+    puntos = puntos + 1?
+]
+
+pipe puntos?
+
+[??]
+    El archivo de prueba ahora cubre todas
+    las palabras reservadas 
+[??]

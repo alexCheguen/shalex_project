@@ -12,10 +12,9 @@ extern FILE *yyin;
 void yyerror(const char *s);
 
 /* =========================================================================
- * 1. ESTRUCTURAS DE DATOS: TABLA DE SÍMBOLOS Y AST
+ * 1. TABLA DE SÍMBOLOS Y ESTRUCTURA DEL AST
  * ========================================================================= */
 
-/* Tabla de Símbolos básica */
 typedef struct Symbol {
     char name[50];
     char type[20];
@@ -27,7 +26,7 @@ Symbol *symbolTable = NULL;
 void addSymbol(const char *name, const char *type) {
     Symbol *curr = symbolTable;
     while (curr) {
-        if (strcmp(curr->name, name) == 0) return; // Ya existe
+        if (strcmp(curr->name, name) == 0) return;
         curr = curr->next;
     }
     Symbol *newSym = (Symbol *)malloc(sizeof(Symbol));
@@ -37,15 +36,20 @@ void addSymbol(const char *name, const char *type) {
     symbolTable = newSym;
 }
 
-/* Árbol Sintáctico Abstracto (AST) */
 typedef enum {
     NODE_PROGRAM,
+    NODE_INT,
+    NODE_FLOAT,
+    NODE_PLAYER,
     NODE_DECLARATION,
     NODE_ASSIGNMENT,
     NODE_IF,
+    NODE_IF_ELSE,
     NODE_WHILE,
+    NODE_FOR_LEVEL,
     NODE_READ,
     NODE_WRITE,
+    NODE_PIPE,
     NODE_BIN_OP,
     NODE_VAR,
     NODE_LITERAL,
@@ -56,13 +60,16 @@ typedef struct ASTNode {
     NodeType type;
     char label[100];
     char var_name[50];
-    char value_str[50];
+    char value_str[100];
     char op_symbol[10];
     
     struct ASTNode *left;
     struct ASTNode *right;
     struct ASTNode *cond;
     struct ASTNode *body;
+    struct ASTNode *else_body;
+    struct ASTNode *init;
+    struct ASTNode *step;
     
     struct ASTNode **children;
     int child_count;
@@ -70,7 +77,6 @@ typedef struct ASTNode {
 
 ASTNode *ast_root = NULL;
 
-/* Funciones auxiliares para construcción de AST */
 ASTNode *createNode(NodeType type, const char *label) {
     ASTNode *node = (ASTNode *)calloc(1, sizeof(ASTNode));
     node->type = type;
@@ -86,7 +92,7 @@ void addChild(ASTNode *parent, ASTNode *child) {
 }
 
 /* =========================================================================
- * 2. GENERADOR DE CÓDIGO A ULORIO (.urio)
+ * 2. TRADUCCIÓN A ULORIO (.urio)
  * ========================================================================= */
 
 void generar_codigo_ulorio(ASTNode *node, FILE *out) {
@@ -100,20 +106,29 @@ void generar_codigo_ulorio(ASTNode *node, FILE *out) {
             }
             break;
 
+        case NODE_INT:
+            fprintf(out, "entero %s = %s;\n", node->var_name, node->value_str);
+            break;
+
+        case NODE_FLOAT:
+            fprintf(out, "real %s = %s;\n", node->var_name, node->value_str);
+            break;
+
+        case NODE_PLAYER:
+            fprintf(out, "crear %s = '%s';\n", node->var_name, node->value_str);
+            break;
+
         case NODE_DECLARATION:
-            // coin x = 10? -> crear $x = 10;
-            fprintf(out, "crear $%s = %s;\n", node->var_name, node->value_str);
+            fprintf(out, "crear %s = %s;\n", node->var_name, node->value_str);
             break;
 
         case NODE_ASSIGNMENT:
-            // x = 10? -> $x = 10;
-            fprintf(out, "$%s = ", node->var_name);
+            fprintf(out, "%s = ", node->var_name);
             generar_codigo_ulorio(node->left, out);
             fprintf(out, ";\n");
             break;
 
         case NODE_IF:
-            // mushroom (cond) [ ... ] -> si (cond) [ ... ]
             fprintf(out, "si (");
             generar_codigo_ulorio(node->cond, out);
             fprintf(out, ") [\n");
@@ -121,8 +136,22 @@ void generar_codigo_ulorio(ASTNode *node, FILE *out) {
             fprintf(out, "]\n");
             break;
 
+        case NODE_IF_ELSE:
+            fprintf(out, "si (");
+            generar_codigo_ulorio(node->cond, out);
+            fprintf(out, ") [\n");
+            generar_codigo_ulorio(node->body, out);
+            fprintf(out, "] sino ");
+            if (node->else_body && (node->else_body->type == NODE_IF || node->else_body->type == NODE_IF_ELSE)) {
+                generar_codigo_ulorio(node->else_body, out);
+            } else {
+                fprintf(out, "[\n");
+                generar_codigo_ulorio(node->else_body, out);
+                fprintf(out, "]\n");
+            }
+            break;
+
         case NODE_WHILE:
-            // warp (cond) [ ... ] -> mientras (cond) [ ... ]
             fprintf(out, "mientras (");
             generar_codigo_ulorio(node->cond, out);
             fprintf(out, ") [\n");
@@ -130,16 +159,28 @@ void generar_codigo_ulorio(ASTNode *node, FILE *out) {
             fprintf(out, "]\n");
             break;
 
+        case NODE_FOR_LEVEL:
+            generar_codigo_ulorio(node->init, out);
+            fprintf(out, "mientras (");
+            generar_codigo_ulorio(node->cond, out);
+            fprintf(out, ") [\n");
+            generar_codigo_ulorio(node->body, out);
+            generar_codigo_ulorio(node->step, out);
+            fprintf(out, "]\n");
+            break;
+
         case NODE_READ:
-            // box(x)? -> leer($x);
-            fprintf(out, "leer($%s);\n", node->var_name);
+            fprintf(out, "leer(%s);\n", node->var_name);
             break;
 
         case NODE_WRITE:
-            // flag(x)? -> mostrar($x);
             fprintf(out, "mostrar(");
             generar_codigo_ulorio(node->left, out);
             fprintf(out, ");\n");
+            break;
+
+        case NODE_PIPE:
+            fprintf(out, "mostrar(%s);\n", node->var_name);
             break;
 
         case NODE_BIN_OP:
@@ -149,7 +190,7 @@ void generar_codigo_ulorio(ASTNode *node, FILE *out) {
             break;
 
         case NODE_VAR:
-            fprintf(out, "$%s", node->var_name);
+            fprintf(out, "%s", node->var_name);
             break;
 
         case NODE_LITERAL:
@@ -164,7 +205,7 @@ void generar_codigo_ulorio(ASTNode *node, FILE *out) {
 %}
 
 /* =========================================================================
- * 3. DECLARACIÓN DE UNION Y TOKENS (SINTONIZADOS CON FLEX)
+ * 3. DECLARACIÓN DE UNION Y TOKENS
  * ========================================================================= */
 
 %union {
@@ -174,21 +215,17 @@ void generar_codigo_ulorio(ASTNode *node, FILE *out) {
     struct ASTNode *ast_node;
 }
 
-/* Palabras reservadas */
 %token TOKEN_COIN TOKEN_STAR TOKEN_PLAYER TOKEN_MUSHROOM TOKEN_ONEUP
 %token TOKEN_POISON TOKEN_WARP TOKEN_LEVEL TOKEN_BOX TOKEN_FLAG TOKEN_PIPE
 
-/* Operadores relacionales */
 %token TOKEN_EQ TOKEN_NEQ TOKEN_LEQ TOKEN_GEQ
 
-/* Identificadores y Literales */
-%token <str_val> TOKEN_ID
+%token <str_val> TOKEN_ID TOKEN_STRING
 %token <int_val> TOKEN_NUM_INT
 %token <float_val> TOKEN_NUM_FLOAT
 
-/* Tipos para No-Terminales */
-%type <ast_node> programa lista_instrucciones instruccion declaracion asignacion
-%type <ast_node> condicional ciclo lectura escritura expresion termino factor expresion_relacional
+%type <ast_node> programa lista_instrucciones instruccion declaracion asignacion asignacion_sin_q
+%type <ast_node> condicional bloques_alternativos ciclo lectura escritura expresion termino factor condicion
 
 %%
 
@@ -228,13 +265,18 @@ instruccion:
     | ciclo       { $$ = $1; }
     | lectura     { $$ = $1; }
     | escritura   { $$ = $1; }
+    | TOKEN_PIPE TOKEN_ID '?' {
+        ASTNode *node = createNode(NODE_PIPE, "PIPE");
+        strncpy(node->var_name, $2, 49);
+        free($2);
+        $$ = node;
+    }
     ;
 
-/* Declaraciones: coin x = 10? o star y = 0.5? */
 declaracion:
     TOKEN_COIN TOKEN_ID '=' TOKEN_NUM_INT '?' {
         addSymbol($2, "INT");
-        ASTNode *node = createNode(NODE_DECLARATION, "DECLARACION_INT");
+        ASTNode *node = createNode(NODE_INT, "DECLARACION_INT");
         strncpy(node->var_name, $2, 49);
         snprintf(node->value_str, 49, "%d", $4);
         free($2);
@@ -242,15 +284,23 @@ declaracion:
     }
     | TOKEN_STAR TOKEN_ID '=' TOKEN_NUM_FLOAT '?' {
         addSymbol($2, "FLOAT");
-        ASTNode *node = createNode(NODE_DECLARATION, "DECLARACION_FLOAT");
+        ASTNode *node = createNode(NODE_FLOAT, "DECLARACION_FLOAT");
         strncpy(node->var_name, $2, 49);
         snprintf(node->value_str, 49, "%.2f", $4);
         free($2);
         $$ = node;
     }
+    | TOKEN_PLAYER TOKEN_ID '=' TOKEN_STRING '?' {
+        addSymbol($2, "PLAYER");
+        ASTNode *node = createNode(NODE_PLAYER, "DECLARACION_PLAYER");
+        strncpy(node->var_name, $2, 49);
+        strncpy(node->value_str, $4, 99);
+        free($2);
+        free($4);
+        $$ = node;
+    }
     ;
 
-/* Asignaciones: x = expresion? */
 asignacion:
     TOKEN_ID '=' expresion '?' {
         addSymbol($1, "VAR");
@@ -262,27 +312,80 @@ asignacion:
     }
     ;
 
-/* Condicionales: mushroom (cond) [ ... ] */
-condicional:
-    TOKEN_MUSHROOM '(' expresion_relacional ')' '[' lista_instrucciones ']' {
-        ASTNode *node = createNode(NODE_IF, "MUSHROOM_IF");
-        node->cond = $3;
-        node->body = $6;
+asignacion_sin_q:
+    TOKEN_ID '=' expresion {
+        addSymbol($1, "VAR");
+        ASTNode *node = createNode(NODE_ASSIGNMENT, "ASIGNACION");
+        strncpy(node->var_name, $1, 49);
+        node->left = $3;
+        free($1);
         $$ = node;
     }
     ;
 
-/* Ciclos: warp (cond) [ ... ] */
+condicional:
+    TOKEN_MUSHROOM '(' condicion ')' '[' lista_instrucciones ']' bloques_alternativos {
+        if ($8 == NULL) {
+            ASTNode *node = createNode(NODE_IF, "MUSHROOM_IF");
+            node->cond = $3;
+            node->body = $6;
+            $$ = node;
+        } else {
+            ASTNode *node = createNode(NODE_IF_ELSE, "MUSHROOM_IF_ELSE");
+            node->cond = $3;
+            node->body = $6;
+            node->else_body = $8;
+            $$ = node;
+        }
+    }
+    ;
+
+bloques_alternativos:
+    /* Vacio */ { $$ = NULL; }
+    | TOKEN_POISON '[' lista_instrucciones ']' {
+        $$ = $3;
+    }
+    | TOKEN_ONEUP '(' condicion ')' '[' lista_instrucciones ']' bloques_alternativos {
+        if ($8 == NULL) {
+            ASTNode *node = createNode(NODE_IF, "ONEUP_IF");
+            node->cond = $3;
+            node->body = $6;
+            $$ = node;
+        } else {
+            ASTNode *node = createNode(NODE_IF_ELSE, "ONEUP_IF_ELSE");
+            node->cond = $3;
+            node->body = $6;
+            node->else_body = $8;
+            $$ = node;
+        }
+    }
+    ;
+
 ciclo:
-    TOKEN_WARP '(' expresion_relacional ')' '[' lista_instrucciones ']' {
+    TOKEN_WARP '(' condicion ')' '[' lista_instrucciones ']' {
         ASTNode *node = createNode(NODE_WHILE, "WARP_WHILE");
         node->cond = $3;
         node->body = $6;
         $$ = node;
     }
+    | TOKEN_LEVEL '(' declaracion condicion '?' asignacion_sin_q ')' '[' lista_instrucciones ']' {
+        ASTNode *node = createNode(NODE_FOR_LEVEL, "LEVEL_FOR");
+        node->init = $3;
+        node->cond = $4;
+        node->step = $6;
+        node->body = $9;
+        $$ = node;
+    }
+    | TOKEN_LEVEL '(' declaracion condicion '?' asignacion ')' '[' lista_instrucciones ']' {
+        ASTNode *node = createNode(NODE_FOR_LEVEL, "LEVEL_FOR");
+        node->init = $3;
+        node->cond = $4;
+        node->step = $6;
+        node->body = $9;
+        $$ = node;
+    }
     ;
 
-/* Lectura: box(x)? */
 lectura:
     TOKEN_BOX '(' TOKEN_ID ')' '?' {
         addSymbol($3, "VAR");
@@ -293,7 +396,6 @@ lectura:
     }
     ;
 
-/* Escritura: flag(expresion)? */
 escritura:
     TOKEN_FLAG '(' expresion ')' '?' {
         ASTNode *node = createNode(NODE_WRITE, "FLAG_WRITE");
@@ -302,8 +404,7 @@ escritura:
     }
     ;
 
-/* Expresiones relacionales */
-expresion_relacional:
+condicion:
     expresion TOKEN_LEQ expresion {
         ASTNode *node = createNode(NODE_BIN_OP, "OP_LEQ");
         strncpy(node->op_symbol, "<=", 9);
@@ -348,7 +449,6 @@ expresion_relacional:
     }
     ;
 
-/* Expresiones aritméticas */
 expresion:
     expresion '+' termino {
         ASTNode *node = createNode(NODE_BIN_OP, "SUMA");
@@ -409,7 +509,7 @@ factor:
 %%
 
 /* =========================================================================
- * 5. CÓDIGO C INTEGRADO Y PUNTO DE ENTRADA MAIN
+ * 5. CÓDIGO C INTEGRADO Y MAIN
  * ========================================================================= */
 
 void yyerror(const char *s) {
@@ -442,7 +542,6 @@ int main(int argc, char **argv) {
             return 1;
         }
 
-        /* Generación del archivo en formato Ulorio */
         generar_codigo_ulorio(ast_root, out_file);
         fclose(out_file);
 
@@ -454,5 +553,3 @@ int main(int argc, char **argv) {
     fclose(input_file);
     return 0;
 }
-
-

@@ -42,13 +42,21 @@ void yyerror(const char *s);
 "("             { return '('; }
 ")"             { return ')'; }
 
+\'[^\']*\' {
+    int len = strlen(yytext);
+    yylval.str_val = (char *)malloc(len - 1);
+    strncpy(yylval.str_val, yytext + 1, len - 2);
+    yylval.str_val[len - 2] = '\0';
+    return TOKEN_STRING;
+}
+
 [a-zA-Z_][a-zA-Z0-9_]* {
     yylval.str_val = strdup(yytext);
     return TOKEN_ID;
 }
 
 [0-9]+\.[0-9]+ {
-    yylval.float_val = atof(yytext);
+    yylval.float_val = (float)atof(yytext);
     return TOKEN_NUM_FLOAT;
 }
 
@@ -57,10 +65,14 @@ void yyerror(const char *s);
     return TOKEN_NUM_INT;
 }
 
-"\[\?\]"[^\n]*               ; /* Ignora comentarios [?] */
-"\[\?\?\]"(.|\n)*?"\[\?\?\]" ; /* Ignora comentarios multilínea [??] */
-[ \t\r\n]+                   ; /* Ignora espacios */
+"//".*                                  ;
+"/*"([^*]|\*+[^*/])*"*/"               ;
+"[?]"[^\n]*                             ;
+"[??]"([^[??]]|(\?[^\[??\]]))*?"[??]"   ;
+[ \t\r\n]+                              ;
 
-. { printf("Error Léxico: Carácter no reconocido '%s'\n", yytext); }
+. {
+    printf("Error Lexico: Caracter no reconocido '%s' en la linea %d\n", yytext, yylineno);
+}
 
 %%
